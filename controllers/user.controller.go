@@ -15,7 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-var userCollection *mongo.Collection = database.OpenConnection(database.Client, "users")
+var userCollection *mongo.Collection = database.OpenCollection(database.Client, "users")
 
 func Signup(c *fiber.Ctx) error {
 
@@ -107,4 +107,111 @@ func Signup(c *fiber.Ctx) error {
 		"message": "User singed up successfull",
 		"data":    user,
 	})
+}
+
+func Signin(c *fiber.Ctx) error {
+
+	type SigninRequest struct {
+		Email    string `json:"email" validate:"required"`
+		Password string `json:"password" validate:"required"`
+	}
+	ctx, err := context.WithTimeout(context.TODO(), 10*time.Second)
+	defer err()
+
+	var body SigninRequest
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(200).JSON(fiber.Map{
+			"status":  "error",
+			"message": "some field is missing",
+			"data":    err.Error(),
+		})
+	}
+
+	var existingUser bson.Raw
+	if err := userCollection.FindOne(ctx, bson.M{"email": body.Email}).Decode(&existingUser); err != nil {
+		return c.Status(404).JSON(fiber.Map{
+			"status":  "error",
+			"message": "User not exist",
+			"data":    err.Error(),
+		})
+	}
+	isValidPassword := utils.VerifyPassword(body.Password, existingUser.Lookup("password").StringValue())
+	if !isValidPassword {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid credential",
+			"data":    nil,
+		})
+	}
+	// create token
+	signinToken, errors := utils.CreateToken(existingUser.Lookup("_id").ObjectID(), existingUser.Lookup("email").StringValue(), existingUser.Lookup("userType").StringValue())
+
+	if errors != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Fail to create token",
+			"data":    errors.Error(),
+		})
+	}
+
+	cookies := &fiber.Cookie{
+		Name:     "jwt",
+		Value:    signinToken,
+		Expires:  time.Now().Add(time.Hour * 24),
+		HTTPOnly: true,
+	}
+	c.Cookie(cookies)
+
+	return c.Status(500).JSON(fiber.Map{
+		"status":  "success",
+		"message": "User logged in successfully",
+		"data":    existingUser,
+	})
+}
+
+func Logout(c *fiber.Ctx) error {
+
+	cookies := &fiber.Cookie{
+		Name:    "jwt",
+		Value:   "",
+		Expires: time.Now().Add(-time.Hour),
+	}
+
+	c.Cookie(cookies)
+	return c.Status(200).JSON(fiber.Map{
+		"status":  "success",
+		"message": "successfully logged out",
+		"data":    nil,
+	})
+}
+
+func ProfileUser(c *fiber.Ctx) error {
+	idLocal := c.Locals("id").(string)
+	userId, err := primitive.ObjectIDFromHex(idLocal)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "fail to get user id",
+		})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	var user models.User
+	err = userCollection.FindOne(ctx, bson.M{"_id": userId}).Decode(&user)
+	if err != nil {
+		return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
+			"status":  "error",
+			"message": "User not found",
+			"data":    err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusFound).JSON(fiber.Map{
+		"status":  "success",
+		"message": "User fetched successfullu",
+		"data":    user,
+	})
+
 }

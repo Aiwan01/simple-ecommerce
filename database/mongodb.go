@@ -29,7 +29,7 @@ func ConnectWithMongodb() *mongo.Client {
 
 var Client *mongo.Client = ConnectWithMongodb()
 
-func OpenConnection(client *mongo.Client, collectionName string) *mongo.Collection {
+func OpenCollection(client *mongo.Client, collectionName string) *mongo.Collection {
 
 	var collection *mongo.Collection = client.Database("tentree").Collection(collectionName)
 	return collection

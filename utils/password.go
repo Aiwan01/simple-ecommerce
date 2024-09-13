@@ -1,10 +1,12 @@
 package utils
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -47,4 +49,25 @@ func CreateToken(id primitive.ObjectID, email string, userType string) (string, 
 	} else {
 		return signedToken, nil
 	}
+}
+
+func VerifyPassword(encryptPassword string, password string) bool {
+	encodeSaltPassword := password
+	subParts := strings.Split(encodeSaltPassword, ".")
+
+	decodedPassword, err := base64.RawStdEncoding.DecodeString(subParts[1])
+	if err != nil {
+		return false
+	}
+
+	decodedSalt, err := base64.RawStdEncoding.DecodeString(subParts[0])
+	if err != nil {
+		return false
+	}
+	hashedPassword := argon2.IDKey([]byte(encryptPassword), decodedSalt, 1, 64*1024, 4, 32)
+	// compare the hashedPassword with hash
+	if bytes.Equal(hashedPassword, decodedPassword) {
+		return true
+	}
+	return false
 }
