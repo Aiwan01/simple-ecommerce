@@ -62,32 +62,31 @@ func CreateNewProducts(c *fiber.Ctx) error {
 }
 
 func GetProduct(c *fiber.Ctx) error {
-
 	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
 	defer cancel()
 
-	id := c.Params("id")
-	productid, err := primitive.ObjectIDFromHex(id)
+	productId := c.Params("id")
+	product_id, err := primitive.ObjectIDFromHex(productId)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{
-			"status":  "fail",
-			"message": "Product already exist",
+			"status":  "error",
+			"message": "Unable to get product id",
 			"data":    err,
 		})
 	}
 
 	var product models.Product
-	if err := productCollection.FindOne(ctx, bson.M{"_id": productid}).Decode(&product); err != nil {
-		return c.Status(400).JSON(fiber.Map{
-			"status":  "fail",
-			"message": "Invalid Product id",
+	if err := productCollection.FindOne(ctx, bson.M{"_id": product_id}).Decode(&product); err != nil {
+		return c.Status(404).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Unable to fetch product ",
 			"data":    err,
 		})
 	}
 
 	return c.Status(200).JSON(fiber.Map{
-		"status":  "success",
-		"message": "Here is product details",
+		"status":  "Success",
+		"message": "Successfully fetched product.",
 		"data":    product,
 	})
 
@@ -122,10 +121,99 @@ func GetAllProducts(c *fiber.Ctx) error {
 }
 
 func UpdateProduct(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	defer cancel()
 
-	return nil
+	var productData bson.M
+	if err := c.BodyParser(&productData); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Fail to parse body",
+			"data":    err,
+		})
+	}
+
+	userType := c.Locals("userType").(string)
+	if userType != "ADMIN" {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Only admin can update product",
+			"data":    nil,
+		})
+	}
+
+	id := c.Params("id")
+	productId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "cant convert id into object id",
+			"data":    err,
+		})
+	}
+
+	filter := bson.M{"_id": productId}
+	product, err := productCollection.FindOneAndUpdate(ctx, filter, bson.M{"$set": productData}).DecodeBytes()
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Fail to update product",
+			"data":    err,
+		})
+	}
+
+	return c.Status(200).JSON(fiber.Map{
+		"status":  "success",
+		"message": "successfully updated product",
+		"data":    product.String(),
+	})
 }
 
 func DeleteProduct(c *fiber.Ctx) error {
-	return nil
+	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	defer cancel()
+
+	id := c.Params("id")
+	productId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Can't convert id into primit data",
+			"data":    err,
+		})
+	}
+
+	userType := c.Locals("userType")
+	if userType == "" {
+		return c.Status(500).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Invalid user data modeling",
+			"data":    nil,
+		})
+	}
+
+	if userType != "ADMIN" {
+		return c.Status(403).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Only admin can delete product",
+			"data":    nil,
+		})
+	}
+
+	filter := bson.M{"_id": productId}
+	singleResult := productCollection.FindOneAndDelete(ctx, filter)
+	var product models.Product
+	if err := singleResult.Decode(&product); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Something when wrong on delete",
+			"data":    err.Error(),
+		})
+	}
+
+	return c.Status(200).JSON(fiber.Map{
+		"status":  "success",
+		"message": "Product deleted successful",
+		"data":    nil,
+	})
 }

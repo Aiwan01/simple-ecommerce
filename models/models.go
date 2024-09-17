@@ -54,4 +54,5 @@ type Product struct {
 	Images            []string           `json:"images,omitempty" bson:"images,omitempty"`
 	CreatedAt         time.Time          `json:"createdAt,omitempty" bson:"createdAt,omitempty"`
 	UpdatedAt         time.Time          `json:"updatedAt,omitempty" bson:"updatedAt,omitempty"`
+	// IsActive          bool               `json:"isactive,omitempty", bson:"isactive,omitempty""`
 }
